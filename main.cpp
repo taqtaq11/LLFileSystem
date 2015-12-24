@@ -21,7 +21,7 @@ struct fileDescriptor {
     bool isEmpty;
     int startingDataBlock;
     size_t dataSize;
-    string name;
+    string* name;
 };
 
 struct dataBlock {
@@ -66,6 +66,8 @@ void createNewFS() {
 
     fileDescriptor* buf = (fileDescriptor*)malloc(sizeof(fileDescriptor));
     for (int i = 0; i < MAX_FILES_COUNT; ++i) {
+        buf->name = new string();
+        buf->isEmpty = true;
         fwrite(buf, sizeof(fileDescriptor), 1, llfsFile);
     }
     free(buf);
@@ -87,7 +89,7 @@ void createNewFS() {
 
 int getFileDescriptor(const char* name) {
     for (int i = 0; i < MAX_FILES_COUNT; ++i) {
-        if (fds[i].name == name) {
+        if (fds[i].name->c_str() == name) {
             return i;
         }
     }
@@ -175,7 +177,7 @@ static int llGetattr(const char* path, struct stat *stbuf) {
         return -ENOENT;
 
     fileDescriptor* fd = &fds[fdNum];
-
+    printf("aaa\n");
     if (fd->isFolder) {
         stbuf->st_mode = S_IFDIR | 0755;
         stbuf->st_nlink = 2;
@@ -186,6 +188,7 @@ static int llGetattr(const char* path, struct stat *stbuf) {
         stbuf->st_size = fd->dataSize;
     }
 
+    stbuf->st_mode = stbuf->st_mode | 0777;
     return 0;
 }
 
@@ -218,12 +221,16 @@ static int llRead(const char* path, char* buf, size_t size, off_t offset,
 }
 
 static int llMkdir(const char* path, mode_t mode) {
-
+    int fdNum = getEmptyFileDescriptorNum();
+    fds[fdNum].name = new string(path);
+    fds[fdNum].isEmpty = false;
+    fds[fdNum].isFolder = true;
     return 0;
 }
 
 static int llWrite(const char* path, const char* buf, size_t size, off_t offset,
                     fuse_file_info* fi) {
+    printf("writing\n");
     fileDescriptor* fd;
     int fdNum = getFileDescriptor(path);
     if (fdNum == -1) {
@@ -233,7 +240,7 @@ static int llWrite(const char* path, const char* buf, size_t size, off_t offset,
     int emptyBlockNum = getEmptyDataBlockNum();
     isEmptyBlocks[emptyBlockNum] = false;
     fd->isEmpty = false;
-    fd->name = path;
+    fd->name = new string(path);
     fd->startingDataBlock = emptyBlockNum;
     fd->dataSize = size;
 
@@ -245,22 +252,33 @@ static int llWrite(const char* path, const char* buf, size_t size, off_t offset,
     return 0;
 }
 
-int main(int argc, char *argv[])
-{
+static int llCreate(const char* path, mode_t mode, fuse_file_info* fi) {
+    printf("creating");
+    int fdNum = getEmptyFileDescriptorNum();
+    fds[fdNum].name = new string(path);
+    fds[fdNum].isEmpty = false;
+    fds[fdNum].isFolder = false;
+    return 0;
+}
+
+static int llOpendir(const char *path, fuse_file_info *fi) {
+
+}
+
+int main(int argc, char *argv[]) {
+    printf("before\n");
     createNewFS();
     init();
-    for (int i = 0; i < MAX_FILES_COUNT; ++i) {
-        printf("name: ");
-        printf("%s\n", fds[i].name.c_str());
-    }
+    printf("after\n");
 
-    struct fuse_operations* oper = (fuse_operations*)malloc(sizeof(fuse_operations));
+    fuse_operations* oper = (fuse_operations*)malloc(sizeof(fuse_operations));
     oper->getattr = &llGetattr;
     oper->readdir = &llReaddir;
     oper->open = &llOpen;
     oper->read = &llRead;
     oper->mkdir = &llMkdir;
     oper->write = &llWrite;
+    oper->create = &llCreate;
 
     return fuse_main(argc, argv, oper, NULL);
 }
