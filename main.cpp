@@ -14,7 +14,7 @@ using namespace std;
 const int DATA_BLOCK_SIZE = 2048;
 const int MAX_DATABLOCKS_COUNT = 1024;
 const int MAX_FILES_COUNT = 32;
-const char* PATH_TO_LLFSFILE = "/home/addition/LLFS/fs";
+const char* PATH_TO_LLFSFILE = "/home/taqtaq11/ClionProjects/LLFileSystem/fs";
 
 struct fileDescriptor {
     bool isFolder;
@@ -29,7 +29,6 @@ struct dataBlock {
     int next;
 };
 
-int filesCount = 0;
 bool isEmptyBlocks[MAX_DATABLOCKS_COUNT];
 fileDescriptor fds[MAX_FILES_COUNT];
 
@@ -62,26 +61,26 @@ void init() {
     fclose(llfsFile);
 }
 
-void createNew() {
+void createNewFS() {
     FILE* llfsFile = fopen(PATH_TO_LLFSFILE, "w");
 
-    int* buf = (int*)malloc(sizeof(fileDescriptor));
+    fileDescriptor* buf = (fileDescriptor*)malloc(sizeof(fileDescriptor));
     for (int i = 0; i < MAX_FILES_COUNT; ++i) {
         fwrite(buf, sizeof(fileDescriptor), 1, llfsFile);
     }
     free(buf);
 
-    buf = (int*)malloc(sizeof(bool));
+    bool* bufBool = (bool *)malloc(sizeof(bool));
     for (int i = 0; i < MAX_DATABLOCKS_COUNT; ++i) {
-        fwrite(buf, sizeof(bool), 1, llfsFile);
+        fwrite(bufBool, sizeof(bool), 1, llfsFile);
     }
-    free(buf);
+    free(bufBool);
 
-    buf = (int*)malloc(sizeof(dataBlock));
+    dataBlock* bufInt = (dataBlock*)malloc(sizeof(dataBlock));
     for (int i = 0; i < MAX_DATABLOCKS_COUNT; ++i) {
-        fwrite(buf, sizeof(dataBlock), 1, llfsFile);
+        fwrite(bufInt, sizeof(dataBlock), 1, llfsFile);
     }
-    free(buf);
+    free(bufInt);
 
     fclose(llfsFile);
 }
@@ -143,6 +142,33 @@ void writeDataBlock(int blockNum, const char* data, FILE* file, size_t cnt, size
     free(block);
 }
 
+char* getDirName(char* path) {
+    char* directory;
+    char* p = NULL;
+    char* ptr = path;
+    while (p = *ptr == '/' ? ptr : p, *ptr++ != '\0');
+    if ((p - path) != 0) {
+        directory = (char*)malloc(sizeof(char) * (p - path));
+        strncpy(directory, path, p - path);
+        directory[p - path] = '\0';
+    }
+    else {
+        directory = (char*)malloc(sizeof(char) * 2);
+        strcpy(directory, "/\0");
+    }
+    return directory;
+}
+
+char* getFileName(char *path) {
+    char* filename;
+    char* p = NULL;
+    char *ptr = path;
+    while (p = *ptr == '/' ? ptr : p, *ptr++ != '\0');
+    filename = (char*)malloc(sizeof(char) * (ptr - p));
+    strncpy(filename, p + 1, ptr - p);
+    return filename;
+}
+
 static int llGetattr(const char* path, struct stat *stbuf) {
     int fdNum = getFileDescriptor(path);
     if (fdNum == -1)
@@ -165,10 +191,14 @@ static int llGetattr(const char* path, struct stat *stbuf) {
 
 static int llReaddir(const char* path, void* buf, fuse_fill_dir_t filler,
                      off_t offset, struct fuse_file_info* fi) {
-
+    printf("check readdir");
+    filler(buf, ".", NULL, 0);
+    filler(buf, "..", NULL, 0);
+    return 0;
 }
 
 static int llOpen(const char* path, fuse_file_info* fi) {
+    printf("check open");
     int fd = getFileDescriptor(path);
     if (fd == -1)
         return -ENOENT;
@@ -189,6 +219,7 @@ static int llRead(const char* path, char* buf, size_t size, off_t offset,
 
 static int llMkdir(const char* path, mode_t mode) {
 
+    return 0;
 }
 
 static int llWrite(const char* path, const char* buf, size_t size, off_t offset,
@@ -210,10 +241,19 @@ static int llWrite(const char* path, const char* buf, size_t size, off_t offset,
     writeFileDescriptor(fd, fdNum, llfsFile);
     writeDataBlock(emptyBlockNum, buf, llfsFile, size, size);
     fclose(llfsFile);
+
+    return 0;
 }
 
 int main(int argc, char *argv[])
 {
+    createNewFS();
+    init();
+    for (int i = 0; i < MAX_FILES_COUNT; ++i) {
+        printf("name: ");
+        printf("%s\n", fds[i].name.c_str());
+    }
+
     struct fuse_operations* oper = (fuse_operations*)malloc(sizeof(fuse_operations));
     oper->getattr = &llGetattr;
     oper->readdir = &llReaddir;
